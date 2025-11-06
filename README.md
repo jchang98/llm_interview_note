@@ -1,5 +1,40 @@
 # LLMs 相关知识及面试题
 
+## 关注列表
+### AI热点
+- [Trisimo崔思莫](https://www.zhihu.com/people/yu-you-56-63)
+
+
+### AI面试题
+- [AI有温度](https://www.xiaohongshu.com/user/profile/6416aa61000000001201071b)
+
+
+### AI行业优秀创作者
+- [猛猿](https://www.zhihu.com/people/lemonround)：钦佩以图示解析源码的能力 
+- [ybq](https://www.zhihu.com/people/ybq-29-32)：实践达人，非常有意思、有逻辑的思考
+- [张俊林](https://www.zhihu.com/people/zhang-jun-lin-76 )：关注已久，不多说
+- [苏剑林](https://kexue.fm/category/Big-Data): 苏神
+- [Sam聊算法](https://www.zhihu.com/people/journey-17-51/posts)：LLM你不知道的冷知识
+- [ZHANG Mingxing](https://www.zhihu.com/people/james0zan) ：mooncake 
+- [朱小霖](https://www.zhihu.com/people/zhu-xiao-lin-22-96/posts?page=1)：openRLHF作者
+- [真中合欢](https://www.zhihu.com/people/zhen-zhong-he-huan-68 )：实战主义
+- [曹宇](https://www.zhihu.com/people/moland/posts?page=1 )：openRLHF作者  
+- [张斯俊](https://www.zhihu.com/people/zhang-si-jun-52/posts)：RL给我讲明白的人  
+- [姜富春](https://www.zhihu.com/people/jiang-fu-chun-73): 
+
+### 值得关注的开源代码
+- [vLLM](https://github.com/vllm-project/vllm)： 微软的高性能推理框架
+- [Ray](https://arxiv.org/pdf/1712.05889)： AI应用的分布式框架
+- [OPENRLHF](https://github.com/OpenRLHF/OpenRLHF)：基于 Ray、DeepSpeed 和 HF Transformers 构建的高性能 RLHF 框架
+- [DistServe](https://github.com/LLMServe/DistServe)：开源分离式大模型推理框架
+- [O1研究](https://github.com/hijkzzz/Awesome-LLM-Strawberry): o1
+- [rStar](https://github.com/zhentingqi/rStar)：源码理解MCTS
+- [labml](https://nn.labml.ai/zh/index.html) ：实现神经网络经典算法的开源库
+
+
+### 视频&文档资料
+- [RL蘑菇书](https://datawhalechina.github.io/easy-rl/#/)：
+
 
 ## 简介
 
