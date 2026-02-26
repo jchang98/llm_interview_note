@@ -50,7 +50,7 @@ class MutiHeadAttention(torch.nn.Module):
     def forward(self, hidden_state, attention_mask=None):
         batch_size = hidden_state.size()[0]
         
-        query = self.q_linear(hidden_state)
+        query = self.q_linear(hidden_state) #[b, h, l, dim ] * [b, h, dim ,l] = [b, h, l ,l ] * [b, h, l, dim ]
         key = self.k_linear(hidden_state)
         value = self.v_linear(hidden_state)
         
@@ -62,15 +62,15 @@ class MutiHeadAttention(torch.nn.Module):
         attention_scores = torch.matmul(query, key.transpose(-1, -2)) / torch.sqrt(torch.tensor(self.head_dim))
         
         if attention_mask != None:
-            attention_scores += attention_mask * -1e-9
+            attention_scores += attention_mask * -1e-9 # 减一个很大的值
         
         ## 对注意力分数进行归一化
         attention_probs = torch.softmax(attention_scores, dim=-1)
         
-        output = torch.matmul(attention_probs, value)
+        output = torch.matmul(attention_probs, value)  # [b, h , l, dim]
         
         ## 对注意力输出进行拼接
-        output = output.transpose(-1, -2).contiguous().view(batch_size, -1, self.head_dim * self.num_heads)
+        output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.head_dim * self.num_heads)
         
         output = self.o_linear(output)
         
@@ -132,7 +132,7 @@ class MutiQueryAttention(torch.nn.Module):
         
         output = torch.matmul(attention_probs, value)
         
-        output = output.transpose(-1, -2).contiguous().view(batch_size, -1, self.head_dim * self.num_heads)
+        output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.head_dim * self.num_heads)
         
         output = self.o_linear(output)
         
@@ -202,7 +202,7 @@ class GroupQueryAttention(torch.nn.Module):
         
         output = torch.matmul(attention_probs, value)
         
-        output = output.transpose(-1, -2).contiguous().view(batch_size, -1, self.head_dim * self.num_heads)
+        output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.head_dim * self.num_heads)
         
         output = self.o_linear(output)
         
