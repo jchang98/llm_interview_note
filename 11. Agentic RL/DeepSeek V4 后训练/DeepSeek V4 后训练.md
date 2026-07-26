@@ -9,7 +9,7 @@
 - **后训练拆解笔记与 PDF 附件**：已直读笔记正文，并确认其关联 `DeepSeek_v4_后训练.pdf`（12 页）。它与本文的主线一致：推理努力有无思考 / 中等或较高思考 / Max 三档；工具调用保留完整思维历史；Quick Instruction 用额外控制 token 完成意图或搜索决策；开放任务以生成式评价信号补足单一标量奖励。PDF 的逐页正文尚未从该附件接口导出，故具体公式与数字仍只采信官方报告。
 - **技术报告解读笔记**：已直读正文。其列举 CSA、HCA、mHC、Muon、细粒度 MoE 并行、OPD 等架构或训练关键词；其中“非思考模式使用 RAG、思考模式使用 Agent search”等描述属于作者解读，未在此作为官方事实写入。
 - **官方发布**：DeepSeek 已确认 V4 Preview 分为 Pro 与 Flash，二者均支持 1M 上下文和思考/非思考模式；复杂 Agent 场景建议启用 `reasoning_effort=max`。公告同时确认模型针对 Claude Code、OpenClaw、OpenCode、CodeBuddy 等 Agent 产品适配优化。
-- **报告范围**：本文的重点仍是“后训练”；注意力机制、模型总参数等架构结论应回到技术报告对应章节，而不是从后训练章节外推。
+- **报告范围**：本文的重点仍是“后训练”；但为便于理解 1M context 的训练/服务约束，本文补充技术报告明确披露的 CSA/HCA 注意力关系。除此以外的架构结论不从后训练章节外推。
 
 ## TL;DR
 
@@ -30,6 +30,36 @@ FP4 QAT、可恢复 rollout、百万上下文 RL、Agent 沙箱
 关键思想：先让不同领域独立达到较高能力，再在学生策略自身 rollout 的分布上整合；开放任务以 GRM 和 rubric 取代单标量奖励的不足。
 
 ## Fast Look
+
+**架构—训练关系**：`MLA（KV latent 压缩）→ DSA（token 级稀疏选择）→ V4 CSA（压缩块 + 稀疏选择 + 局部窗口）↔ HCA（重压缩后的全局 dense）→ 1M context rollout / RL`。CSA 负责局部精细检索，HCA 负责廉价全局概览；二者交错使用，不应把 CSA 直接等同为“MLA + DSA”，也不应把 HCA 称为 MLA。
+
+### MLA（Multi-head Latent Attention，多头潜变量注意力）
+
+- **描述**：DeepSeek-V2/V3 系列使用的注意力表示方案：把每个历史 token 的 K/V 压到低维 latent，再缓存/重建注意力所需表示，主要降低 KV Cache 的存储和 Decode 读带宽。
+- **与 MHA/GQA 的区别**：MHA/GQA 直接缓存每个 token 的 K/V（只是在 KV head 数上共享）；MLA 缓存低秩 latent 表示。它仍可对全部历史 token 做 dense attention，并不天然选择少量 token。
+- **优点**：显著减轻 autoregressive Decode 的 KV Cache 内存与带宽瓶颈，适合作为长上下文的表示压缩基础。
+- **缺点/注意点**：低秩压缩会受 latent 容量约束，且并未消除全历史 attention 的二次计算；因此 MLA 不能单独解决 1M context 的 Prefill 计算问题。
+
+### DSA（DeepSeek Sparse Attention，DeepSeek 稀疏注意力）
+
+- **描述**：DeepSeek-V3.2 的 token 级稀疏注意力：Lightning Indexer 先为历史 token 打分，每个 query 选择 top-k token，再对选中的 token 执行 Sparse MLA attention。
+- **与 MLA 的区别**：MLA 主要缩小“每个 token 的 KV 表示”；DSA 主要缩小“每个 query 实际参与 attention 的历史 token 数”。两者在 V3.2 可组合，而非互相替代。
+- **优点**：主 attention 从全历史计算转为内容驱动的 top-k 选择，长上下文的主计算量约从 `O(L²)` 降为 `O(L·k)`。
+- **缺点/注意点**：Indexer 仍需扫描候选历史 token，理论上仍存在 `O(L²)` 部分；top-k 漏检会丢失远程证据，不能称为无损或完全线性注意力。
+
+### CSA（Compressed Sparse Attention，压缩稀疏注意力）
+
+- **描述**：V4 的精细长程分支：先沿序列把相邻 token 聚合成较低压缩率的 KV 块，再由 Lightning Indexer 在这些压缩块中选 top-k；同时保留最近原始 token 的 sliding-window 分支，以保存局部精细依赖。
+- **与 MLA / DSA 的区别**：CSA 继承 DSA 的“内容驱动 top-k 选择”，但选择对象已是**序列压缩块**而非原始 token；它也不同于 MLA 的“每 token KV latent 低秩压缩”。因此可用“压缩后的 DSA”辅助记忆，但不应写成字面上的 `MLA + DSA`。
+- **优点**：压缩后再索引，缩小 indexer 的搜索空间；稀疏远程块与未压缩局部窗口结合，兼顾长程检索和最近 token 的细粒度信息。
+- **缺点/注意点**：块级聚合可能损失块内细节，top-k 仍可能漏检；压缩率、top-k、窗口大小与 indexer 精度共同决定质量—成本取舍，不能只比较单一 FLOPs。
+
+### HCA（Heavily Compressed Attention，重压缩注意力）
+
+- **描述**：V4 的全局概览分支：以比 CSA 更高的序列压缩率把很长历史聚合成极短的块序列，再让 query 对**所有压缩块**做 dense attention；不使用 top-k indexer。
+- **与 MLA / CSA 的区别**：HCA 与 MLA 都有“压缩”这一目标，但 HCA 压缩的是**序列时间轴上的多个 token**，用于构造粗粒度全局记忆；MLA 压缩的是单 token 的 KV 表示。HCA 与 CSA 的分工则是“dense 全局粗视图”对“sparse 精细检索”。
+- **优点**：在极短压缩序列上保留全局可见性，避免每层都做稀疏检索；与 CSA 交错后，可补齐纯 top-k 路线可能遗漏的全局信息。
+- **缺点/注意点**：高压缩会抹去细粒度事实和精确位置；HCA 不是原始 token 上的全局 dense attention，也不等同 MLA，需依赖 CSA 的局部窗口/精细检索弥补细节。
 
 ### 领域专家培养（Domain Expert Cultivation）
 
