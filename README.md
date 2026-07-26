@@ -1,203 +1,156 @@
-# LLMs 相关知识及面试题
+# LLM 面试知识库
 
-## 关注列表
-### AI热点
-- [Trisimo崔思莫](https://www.zhihu.com/people/yu-you-56-63)
+面向 LLM 算法、应用与推理工程岗位的中文学习笔记。内容按“模型原理 → 训练与对齐 → 推理部署 → RAG/Agent → 评估与应用”组织，既可系统学习，也可按面试主题快速查阅。
 
+## 从这里开始
 
-### AI面试题
-- [AI有温度](https://www.xiaohongshu.com/user/profile/6416aa61000000001201071b)
+| 你的目标 | 推荐阅读顺序 |
+| --- | --- |
+| 系统学习大模型 | 基础 → Transformer 架构 → 微调 → 推理 → 强化学习 → RAG/Agent → 评估 |
+| 准备算法岗位面试 | 架构 → 分布式训练 → 微调/对齐 → 推理优化 → RAG/Agent |
+| 准备 LLM 应用岗位面试 | 基础概念 → Prompt/微调 → RAG → Agent → 评估与幻觉 |
+| 准备推理/部署岗位面试 | 架构 → 显存与并行 → 推理框架 → 推理优化 → 量化 |
 
+## 知识地图
 
-### AI行业优秀创作者
-- [猛猿](https://www.zhihu.com/people/lemonround)：钦佩以图示解析源码的能力 
-- [ybq](https://www.zhihu.com/people/ybq-29-32)：实践达人，非常有意思、有逻辑的思考
-- [张俊林](https://www.zhihu.com/people/zhang-jun-lin-76 )：关注已久，不多说
-- [苏剑林](https://kexue.fm/category/Big-Data): 苏神
-- [Sam聊算法](https://www.zhihu.com/people/journey-17-51/posts)：LLM你不知道的冷知识
-- [ZHANG Mingxing](https://www.zhihu.com/people/james0zan) ：mooncake 
-- [朱小霖](https://www.zhihu.com/people/zhu-xiao-lin-22-96/posts?page=1)：openRLHF作者
-- [真中合欢](https://www.zhihu.com/people/zhen-zhong-he-huan-68 )：实战主义
-- [曹宇](https://www.zhihu.com/people/moland/posts?page=1 )：openRLHF作者  
-- [张斯俊](https://www.zhihu.com/people/zhang-si-jun-52/posts)：RL给我讲明白的人  
-- [姜富春](https://www.zhihu.com/people/jiang-fu-chun-73): 
+每章均按“**知识点 → 章节内关系 → 与前章关系 → 优点 → 局限/注意点**”速览；点击标题进入完整笔记。
 
-### 值得关注的开源代码
-- [vLLM](https://github.com/vllm-project/vllm)： 微软的高性能推理框架
-- [Ray](https://arxiv.org/pdf/1712.05889)： AI应用的分布式框架
-- [OPENRLHF](https://github.com/OpenRLHF/OpenRLHF)：基于 Ray、DeepSpeed 和 HF Transformers 构建的高性能 RLHF 框架
-- [DistServe](https://github.com/LLMServe/DistServe)：开源分离式大模型推理框架
-- [O1研究](https://github.com/hijkzzz/Awesome-LLM-Strawberry): o1
-- [rStar](https://github.com/zhentingqi/rStar)：源码理解MCTS
-- [labml](https://nn.labml.ai/zh/index.html) ：实现神经网络经典算法的开源库
+### [01. 大语言模型基础](./01.大语言模型基础/README.md)
 
+- **知识点**：语言模型、分词、词性/句法、词向量、Word2Vec、CNN/RNN/Transformer、Decoder-only。
+- **章节内关系**：文本先被分词转成 token，再映射为向量；特征提取网络据此建模上下文，最终形成“预测下一个 token”的语言模型。
+- **与前章关系**：起点章节；为后续 Transformer、训练和推理提供术语与输入表示。
+- **优点**：建立完整 NLP→LLM 的概念地基，能回答“模型输入是什么、为什么能生成文本”。
+- **局限/注意点**：传统分词、词性和 Word2Vec 是背景知识，不能替代现代 tokenizer、上下文表征与 Transformer。
 
-### 视频&文档资料
-- [RL蘑菇书](https://datawhalechina.github.io/easy-rl/#/)：
+### [02. 大语言模型架构](./02.大语言模型架构/README.md)
 
+- [Qwen 系列开源模型：从初代到 Qwen3.6](./02.大语言模型架构/Qwen系列模型/Qwen系列模型.md)：初代、1.5、2、2.5、1M、3，以及 Qwen3.5/3.6 的可下载权重、架构和部署边界。
 
-## 简介
+- **知识点**：Attention、位置编码、归一化、激活函数、Token、MHA/MQA/GQA、解码策略、BERT、Llama/ChatGLM、MoE。
+- **章节内关系**：Token/位置编码构成输入；Attention 建模 token 关系，Norm 与 FFN 稳定并增强变换；多头变体优化 KV 成本，解码策略决定输出；Llama、MoE 等是这些模块的架构组合与扩展。
+- **与前章关系**：把第 01 章的“语言建模任务”落实为可训练的 Transformer 网络。
+- **优点**：覆盖 LLM 面试最核心的计算图、架构差异和性能取舍。
+- **局限/注意点**：模型系列与具体超参数迭代很快；回答时应解释设计动机，而非死记版本特性。
 
-本仓库为大模型面试相关概念，由本人参考网络资源整理，欢迎阅读，如果对你有用，麻烦点一下 `🌟 star`，谢谢！
+### [03. 训练数据集](./03.训练数据集/README.md)
 
-为了在低资源情况下，学习大模型，进行动手实践，创建 [tiny-llm-zh](https://github.com/wdndev/tiny-llm-zh)仓库，旨在构建一个小参数量的中文大语言模型，该项目已部署，可以在如下网站上体验：[ModeScope Tiny LLM](https://www.modelscope.cn/studios/wdndev/tiny_llm_92m_demo/summary)。
+- **知识点**：预训练/指令数据的格式与数据集基础。
+- **章节内关系**：原始文本经过清洗、切分与模板化，形成 token 序列或指令—回答样本；格式直接决定损失掩码与训练目标。
+- **与前章关系**：第 02 章定义模型如何计算，本章定义模型拿什么数据学习。
+- **优点**：把“数据格式”与模型输入、监督信号对应起来，便于理解训练代码。
+- **局限/注意点**：当前覆盖偏基础；数据质量、去重、污染、版权与配比等生产关键问题需要额外补充。
 
-动手实践项目：
-- [tiny-llm-zh](https://github.com/wdndev/tiny-llm-zh) : 从零实现一个小参数量的中文大语言模型，快速掌握大模型预训练、微调、RL等相关技术；
-- [tiny-rag](https://github.com/wdndev/tiny-rag) : 实现一个简单的RAG系统，支持多路召回、重排等功能，快速了解搜索相关内容；
-- [tiny-mcp](https://github.com/wdndev/tiny-mcp) : 使用 Prompt 和 Function Calling 实现 MCP （模型上下文协议）服务端和客户端，快速使用MCP搭建Agent项目。
-- [llama3-from-scratch-zh](https://github.com/wdndev/llama3-from-scratch-zh) : 从零实现 llama3, 可加载 meta 官方权重，可在本地笔记本（16G内存）调试运行
+### [04. 分布式训练](./04.分布式训练/README.md)
 
+- **知识点**：显存构成、数据/张量/流水线/序列/MoE 并行、混合并行、DeepSpeed、自动并行。
+- **章节内关系**：先用参数、梯度、优化器状态和激活值定位显存瓶颈；再按“复制 batch、切分层、切分矩阵、切分序列/专家”选择并行策略，最终组合为混合并行。
+- **与前章关系**：第 03 章给出训练样本，本章解决“大模型和大批量样本如何放入多卡集群训练”。
+- **优点**：提供从瓶颈诊断到并行方案选择的工程框架。
+- **局限/注意点**：并行会引入通信、流水线气泡和负载不均；不能只看显存节省，还要看吞吐与网络拓扑。
 
-其他学习资源推荐：
+### [05. 有监督微调](./05.有监督微调/README.md)
 
-- [AI 工程师八股](https://github.com/wdndev/ai_interview_note) : 包含深度学习、机器学习、推荐系统、搜索系统等通用知识
+- **知识点**：预训练、SFT、Prompting、Adapter、LoRA、Llama 2 与 ChatGLM 微调实践。
+- **章节内关系**：预训练获得通用能力，Prompt 直接调动能力，SFT 用标注数据对齐任务；Adapter/LoRA 在冻结主干的前提下用少量可训练参数完成高效微调。
+- **与前章关系**：第 04 章解决“怎样训练得动”，本章解决“怎样把通用模型适配为具体任务模型”。
+- **优点**：成本低、迭代快，LoRA 便于多任务适配和模型复用。
+- **局限/注意点**：受数据质量和任务分布限制，可能遗忘通用能力；参数高效微调不等于一定优于全量微调。
 
+### [06. 推理与优化](./06.推理/README.md)
 
+- **知识点**：Prefill/Decode、KV Cache、连续批处理、vLLM/TGI/FasterTransformer/TensorRT-LLM、量化、服务参数。
+- **章节内关系**：推理先在 Prefill 构建 KV Cache，再在 Decode 阶段逐 token 复用；调度与分页 KV Cache 提升并发，算子/图优化和量化降低时延、显存或成本。
+- **与前章关系**：第 05 章产出适配后的权重，本章将其变成高吞吐、低时延的线上服务。
+- **优点**：直接面向吞吐、首 token 时延、生成时延和显存成本等生产指标。
+- **局限/注意点**：量化和激进批处理可能损失精度或牺牲尾延迟；优化方案必须按实际请求长度与硬件验证。
 
-## 在线阅读
+### [07. 强化学习与对齐](./07.强化学习/README.md)
 
-在线阅读链接：[LLMs Interview Note](http://wdndev.github.io/llm_interview_note)
+- **知识点**：策略梯度、PPO、RLHF、奖励模型、DPO。
+- **章节内关系**：偏好数据先训练奖励模型或直接形成偏好对；PPO 通过奖励与 KL 约束更新策略，DPO 将偏好优化写成监督式目标，减少在线 RL 复杂度。
+- **与前章关系**：第 05 章用参考答案做 SFT，本章进一步用“哪个答案更好”的偏好信号对齐行为。
+- **优点**：改善帮助性、遵循性与安全性；DPO 的训练链路通常比 PPO 更简单稳定。
+- **局限/注意点**：奖励错设会导致 reward hacking；PPO 成本和稳定性要求高，DPO 依赖偏好数据质量且不覆盖全部在线探索需求。
 
+### [08. RAG 与 Agent](./08.检索增强rag_agent/README.md)
 
-## 注意：
+- **知识点**：向量检索、召回、重排、上下文构建、RAG 架构、工具调用与 Agent。
+- **章节内关系**：RAG 先对知识分块和索引，再经召回、重排和上下文拼接辅助生成；Agent 在此基础上增加规划、工具选择、执行和反馈循环。
+- **与前章关系**：第 07 章主要改变模型行为偏好，本章通过外部知识和工具扩展模型在推理时可获得的能力。
+- **优点**：知识可更新、答案可溯源，且比反复微调更适合私有知识与实时信息。
+- **局限/注意点**：效果上限受检索质量约束；上下文噪声、工具失败和多步累积误差都会造成幻觉或任务失败。
 
-相关答案为自己撰写，若有不合理地方，请指出修正，谢谢！
+### [09. 大语言模型评估](./09.大语言模型评估/README.md)
 
-欢迎关注微信公众号，会不定期更新LLM内容，以及一些面试经验：
+- **知识点**：基准评测、人工/自动评测、幻觉分类、幻觉来源与缓解。
+- **章节内关系**：先界定任务与指标，再通过基准、人工或模型裁判评测；幻觉是质量问题的一类，需从数据、模型、提示、检索和解码链路定位与缓解。
+- **与前章关系**：第 08 章构建 RAG/Agent 系统，本章回答“系统是否真的更准确、可靠和可控”。
+- **优点**：把主观的“回答不错”转化为可比较、可回归的质量指标。
+- **局限/注意点**：单一 benchmark 容易被刷分；LLM-as-a-Judge 也有偏差，线上评测必须贴近真实任务与风险。
 
- <img src=https://github.com/wdndev/personal/blob/main/image/llmers_weixin.jpg width = "427" height = "156" alt="weixin" />
+### [10. 大语言模型应用](./10.大语言模型应用cot/README.md)
 
+- **知识点**：思维链（CoT）、LangChain 的链、提示与编排概念。
+- **章节内关系**：CoT 通过显式中间步骤改善复杂推理；LangChain 将模型、Prompt、检索、记忆和工具封装为可组合的应用链路。
+- **与前章关系**：第 09 章定义如何衡量质量，本章把已评估的模型能力封装成交互式应用。
+- **优点**：原型构建快，适合把多组件流程模块化、可观测化。
+- **局限/注意点**：框架抽象可能掩盖 Prompt、检索与状态管理问题；简单场景不应为了使用框架而增加依赖。
 
-## 目录
+### [11. Agentic RL](./11.%20Agentic%20RL/README.md)
 
-* [首页](/)
-* [真实面试题](/ch1)
-* [01.大语言模型基础](/01.大语言模型基础/)
-  * [1.1 大模型发展历程](/01.大语言模型基础/)
-    * [1.语言模型](/01.大语言模型基础/1.语言模型/1.语言模型.md "1.语言模型")
-  * [1.2 分词与词向量](/01.大语言模型基础)
-    * [1.分词](/01.大语言模型基础/1.分词/1.分词.md)
-    * [2.jieba分词用法及原理](/01.大语言模型基础/2.jieba分词用法及原理/2.jieba分词用法及原理.md)
-    * [3.词性标注](/01.大语言模型基础/3.词性标注/3.词性标注.md)
-    * [4.句法分析](/01.大语言模型基础/4.句法分析/4.句法分析.md "4.句法分析")
-    * [5.词向量](/01.大语言模型基础/5.词向量/5.词向量.md "5.词向量")
-  * [1.3 语言模型基础知识](/01.大语言模型基础/)
-    * [Word2Vec](/01.大语言模型基础/Word2Vec/Word2Vec.md "Word2Vec")
-    * [NLP三大特征抽取器（CNN/RNN/TF）](/01.大语言模型基础/NLP三大特征抽取器（CNN-RNN-TF）/NLP三大特征抽取器（CNN-RNN-TF）.md)
-    * [NLP面试题](/01.大语言模型基础/NLP面试题/NLP面试题.md "NLP面试题")
-    * [LLM为什么Decoder only架构](</01.大语言模型基础/LLM为什么Decoder only架构/LLM为什么Decoder only架构.md> "LLM为什么Decoder only架构")
-  * [1.4 深度学习](/01.大语言模型基础/)
-    * [1.激活函数](/01.大语言模型基础/1.激活函数/1.激活函数.md)
-  * [1.5 一些题目](/01.大语言模型基础/)
-    * [1.llm概念](/01.大语言模型基础/1.llm概念/1.llm概念.md)
-* [02.大语言模型架构](/02.大语言模型架构/)
-  * [2.1 Transformer模型](/02.大语言模型架构/)
-    * [1.attention](/02.大语言模型架构/1.attention/1.attention.md "1.attention")
-    * [2.layer\_normalization](/02.大语言模型架构/2.layer_normalization/2.layer_normalization.md "2.layer_normalization")
-    * [3.位置编码](/02.大语言模型架构/3.位置编码/3.位置编码.md "3.位置编码")
-    * [4.tokenize分词](/02.大语言模型架构/4.tokenize分词/4.tokenize分词.md "4.tokenize分词")
-    * [5.token及模型参数](/02.大语言模型架构/5.token及模型参数/5.token及模型参数.md "5.token及模型参数")
-    * [6.激活函数](/02.大语言模型架构/6.激活函数/6.激活函数.md "6.激活函数")
-  * [2.2 注意力](/02.大语言模型架构/)
-    * [MHA\_MQA\_GQA](/02.大语言模型架构/MHA_MQA_GQA/MHA_MQA_GQA.md "MHA_MQA_GQA")
-  * [2.3 解码部分](/02.大语言模型架构/)
-    * [解码策略（Top-k & Top-p & Temperature）](</02.大语言模型架构/解码策略（Top-k & Top-p & Temperatu/解码策略（Top-k & Top-p & Temperature）.md> "解码策略（Top-k & Top-p & Temperature）")
-  * [2.4 BERT](/02.大语言模型架构/)
-    * [bert细节](/02.大语言模型架构/bert细节/bert细节.md "bert细节")
-    * [Transformer架构细节](/02.大语言模型架构/Transformer架构细节/Transformer架构细节.md "Transformer架构细节")
-    * [bert变种](/02.大语言模型架构/bert变种/bert变种.md "bert变种")
-  * [2.5 常见大模型](/02.大语言模型架构/)
-    * [llama系列模型](/02.大语言模型架构/llama系列模型/llama系列模型.md "llama系列模型")
-    * [chatglm系列模型](/02.大语言模型架构/chatglm系列模型/chatglm系列模型.md "chatglm系列模型")
-    * [llama 2代码详解](</02.大语言模型架构/llama 2代码详解/llama 2代码详解.md> "llama 2代码详解")
-    * [llama 3](</02.大语言模型架构/llama 3/llama 3.md> "llama 3")
-  * [2.6 MoE](/02.大语言模型架构/)
-    * [1.MoE论文](/02.大语言模型架构/1.MoE论文/1.MoE论文.md "1.MoE论文")
-    * [2.MoE经典论文简牍](/02.大语言模型架构/2.MoE经典论文简牍/2.MoE经典论文简牍.md "2.MoE经典论文简牍")
-    * [3.LLM MoE ：Switch Transformers](</02.大语言模型架构/3.LLM MoE ：Switch Transformers/3.LLM MoE ：Switch Transformers.md> "3.LLM MoE ：Switch Transformers")
-* [03.训练数据集](/03.训练数据集/)
-  * [3.1 数据集](/03.训练数据集/)
-    * [数据格式](/03.训练数据集/数据格式/数据格式.md "数据格式")
-  * [3.2 模型参数](/03.训练数据集/)
-* [04.分布式训练](/04.分布式训练/)
-  * [4.1 基础知识](/04.分布式训练/)
-    * [1.概述](/04.分布式训练/1.概述/1.概述.md "1.概述")
-    * [2.数据并行](/04.分布式训练/2.数据并行/2.数据并行.md "2.数据并行")
-    * [3.流水线并行](/04.分布式训练/3.流水线并行/3.流水线并行.md "3.流水线并行")
-    * [4.张量并行](/04.分布式训练/4.张量并行/4.张量并行.md "4.张量并行")
-    * [5.序列并行](/04.分布式训练/5.序列并行/5.序列并行.md "5.序列并行")
-    * [6.多维度混合并行](/04.分布式训练/6.多维度混合并行/6.多维度混合并行.md "6.多维度混合并行")
-    * [7.自动并行](/04.分布式训练/7.自动并行/7.自动并行.md "7.自动并行")
-    * [8.moe并行](/04.分布式训练/8.moe并行/8.moe并行.md "8.moe并行")
-    * [9.总结](/04.分布式训练/9.总结/9.总结.md "9.总结")
-  * [4.2 DeepSpeed](/04.分布式训练/)
-    * [deepspeed介绍](/04.分布式训练/deepspeed介绍/deepspeed介绍.md "deepspeed介绍")
-  * [4.3 Megatron](/04.分布式训练/)
-  * [4.4 训练加速](/04.分布式训练/)
-  * [4.5 一些有用的文章](/04.分布式训练/)
-  * [4.6 一些题目](/04.分布式训练/)
-    * [1.分布式训练题目](/04.分布式训练/分布式训练题目/分布式训练题目.md "分布式训练题目")
-    * [2.显存问题](/04.分布式训练/1.显存问题/1.显存问题.md "1.显存问题")
-* [05.有监督微调](/05.有监督微调/)
-  * [5.1 理论](/05.有监督微调/)
-    * [1.基本概念](/05.有监督微调/1.基本概念/1.基本概念.md "1.基本概念")
-    * [2.prompting](/05.有监督微调/2.prompting/2.prompting.md "2.prompting")
-    * [3.adapter-tuning](/05.有监督微调/3.adapter-tuning/3.adapter-tuning.md "3.adapter-tuning")
-    * [4.lora](/05.有监督微调/4.lora/4.lora.md "4.lora")
-    * [5.总结](/05.有监督微调/5.总结/5.总结.md "5.总结")
-  * [5.2 微调实战](/05.有监督微调/)
-    * [llama2微调](/05.有监督微调/llama2微调/llama2微调.md "llama2微调")
-    * [ChatGLM3微调](/05.有监督微调/ChatGLM3微调/ChatGLM3微调.md "ChatGLM3微调")
-  * [5.3 一些题目](/05.有监督微调/)
-    * [1.微调](/05.有监督微调/1.微调/1.微调.md "1.微调")
-    * [2.预训练](/05.有监督微调/2.预训练/2.预训练.md "2.预训练")
-* [06.推理](/06.推理/)
-  * [6.1 推理框架](/06.推理/)
-    * [0.llm推理框架简单总结](/06.推理/0.llm推理框架简单总结/0.llm推理框架简单总结.md "0.llm推理框架简单总结")
-    * [1.vllm](/06.推理/1.vllm/1.vllm.md "1.vllm")
-    * [2.text_generation\_inference](/06.推理/2.text_generation_inference/2.text_generation_inference.md "2.text_generation_inference")
-    * [3.faster_transformer](/06.推理/3.faster_transformer/3.faster_transformer.md "3.faster_transformer")
-    * [4.trt_llm](/06.推理/4.trt_llm/4.trt_llm.md "4.trt_llm")
-  * [6.2 推理优化技术](/06.推理/)
-    * [llm推理优化技术](/06.推理/llm推理优化技术/llm推理优化技术.md "llm推理优化技术")
-  * [6.3 量化](/06.推理/)
-  * [6.4 vLLM](/06.推理/)
-  * [6.5 一些题目](/06.推理/)
-    * [1.推理](/06.推理/1.推理/1.推理.md "1.推理")
-* [07.强化学习](/07.强化学习)
-  * [7.1 强化学习原理](/07.强化学习)
-    * [策略梯度（pg）](/07.强化学习/策略梯度（pg）/策略梯度（pg）.md "策略梯度（pg）")
-    * [近端策略优化(ppo)](/07.强化学习/近端策略优化(ppo)/近端策略优化(ppo).md "近端策略优化(ppo)")
-  * [7.2 RLHF](/07.强化学习)
-    * [大模型RLHF：PPO原理与源码解读](/07.强化学习/大模型RLHF：PPO原理与源码解读/大模型RLHF：PPO原理与源码解读.md "大模型RLHF：PPO原理与源码解读")
-    * [DPO](/07.强化学习/DPO/DPO.md "DPO")
-  * [7.3 一些题目](/07.强化学习)
-    * [1.rlhf相关](/07.强化学习/1.rlhf相关/1.rlhf相关.md "1.rlhf相关")
-    * [2.强化学习](/07.强化学习/2.强化学习/2.强化学习.md "2.强化学习")
-* [08.检索增强RAG](/08.检索增强rag/)
-  * [8.1 RAG](/08.检索增强rag/)
-    * [检索增强llm](/08.检索增强rag/检索增强llm/检索增强llm.md "检索增强llm")
-    * [rag（检索增强生成）技术](/08.检索增强rag/rag（检索增强生成）技术/rag（检索增强生成）技术.md "rag（检索增强生成）技术")
-  * [8.2 Agent](/08.检索增强rag/)
-    * [大模型agent技术](/08.检索增强rag/大模型agent技术/大模型agent技术.md "大模型agent技术")
-* [09.大语言模型评估](/09.大语言模型评估/)
-  * [9.1 模型评估](/09.大语言模型评估/)
-    * [1.评测](/09.大语言模型评估/1.评测/1.评测.md "1.评测")
-  * [9.2 LLM幻觉](/09.大语言模型评估/)
-    * [1.大模型幻觉](/09.大语言模型评估/1.大模型幻觉/1.大模型幻觉.md "1.大模型幻觉")
-    * [2.幻觉来源与缓解](/09.大语言模型评估/2.幻觉来源与缓解/2.幻觉来源与缓解.md "2.幻觉来源与缓解")
-* [10.大语言模型应用](/10.大语言模型应用/)
-  * [10.1 思维链提示](/10.大语言模型应用/)
-    * [1.思维链（cot）](/10.大语言模型应用/1.思维链（cot）/1.思维链（cot）.md "1.思维链（cot）")
-  * [10.2 LangChain框架](/10.大语言模型应用/)
-    * [1.langchain](/10.大语言模型应用/1.langchain/1.langchain.md "1.langchain")
-* [98.相关课程](/98.相关课程/)
-* [99.参考资料](/99.参考资料/)
+- **知识点**：数据合成、Agent 环境中的强化学习、富文本反馈。
+- **章节内关系**：Agent 执行会产生代码输出、报错、测试结果等过程反馈；这些信息可用于合成轨迹、构造更细粒度的奖励或训练信号，而非只依赖单个标量分数。
+- **与前章关系**：第 10 章关注如何组织 Agent 应用，本章进一步研究如何利用执行反馈提升 Agent 能力。
+- **优点**：反馈信息更丰富，更适合代码、工具使用等可验证任务。
+- **局限/注意点**：该章节仍偏研究探索；环境设计、反馈解析和训练成本都会显著影响结果。
+- **专题**：[DeepSeek-V4 后训练](./11.%20Agentic%20RL/DeepSeek%20V4%20后训练/DeepSeek%20V4%20后训练.md)：领域专家、GRM、OPD、FP4 QAT 与 Agent rollout 基础设施。
+- **专题**：[DeepSeek-V3.2 技术报告](./11.%20Agentic%20RL/DeepSeek%20V3.2%20技术报告/DeepSeek%20V3.2%20技术报告.md)：DSA、Lightning Indexer、稀疏 MLA、混合 GRPO 与 Agent 任务合成。
+- **专题**：[OPD 在策略蒸馏](./11.%20Agentic%20RL/OPD%20在策略蒸馏/OPD%20在策略蒸馏.md)：student rollout、Reverse KL、token-level reward、MOPD、OPCSD 与 VeRL/RL 实现边界。
+- **专题**：[Kimi K3 技术报告笔记](./11.%20Agentic%20RL/Kimi%20K3%20技术报告/Kimi%20K3%20技术报告.md)：KDA、AttnRes、Stable LatentMoE、Quantile Balancing、Per-Head Muon 与 KDA 服务缓存。
+- **专题**：[GLM-5.2 技术报告](./11.%20Agentic%20RL/GLM-5.2%20技术报告/GLM-5.2%20技术报告.md)：MoE、DSA、IndexShare、MTP、异步 Agentic RL 与 1M 上下文。
 
+### [12. Agent 应用](./12.%20Agent%20应用/README.md)
 
+- **知识点**：Agent 业务应用的预留主题入口。
+- **章节内关系**：预期承接模型、检索、工具、工作流和评估，将它们组合为可交付的业务系统。
+- **与前章关系**：第 11 章侧重训练阶段的 Agent 能力提升，本章侧重将能力落地到产品与业务流程。
+- **优点**：提供从算法组件到真实任务闭环的组织视角。
+- **局限/注意点**：当前目录内容为空；应补充典型场景、权限与安全边界、人工介入和线上观测方案。
 
+### 延伸资源
 
+- [相关课程](./98.相关课程/README.md)：用于补齐神经网络、Transformer、模型压缩与 Prompt Tuning 的系统课程材料。
+- [参考资料](./99.参考资料/README.md)：用于追溯论文、官方文档和原始资料；不替代上述面试主线。
 
+## 高频面试题入口
 
+- [大模型架构高频面试题](./02.大语言模型架构/大模型架构_高频面试题.md)
+- [分布式训练高频面试题](./04.分布式训练/分布式训练_高频面试题.md)
+- [微调高频面试题](./05.有监督微调/微调_高频面试题.md)
+- [推理高频面试题](./06.推理/推理_高频面试题.md)
+- [强化学习高频面试题](./07.强化学习/强化学习_高频面试题.md)
+- [RAG 与 Agent 高频面试题](./08.检索增强rag_agent/rag_agent_高频面试题.md)
+- [LeetCode Hot100：题型索引、思路与 Python 核心代码](./100.%20leetcode/LeetCode%20Hot100/LeetCode%20Hot100.md)
+- [LeetCode 高频面试题导航](./100.%20leetcode/leetcode_高频面试题.md)
 
+## 学习建议
+
+1. **入门**：先完成 01、02，能解释 Transformer 的计算流程与 Decoder-only 的设计原因。
+2. **训练方向**：学习 04、05、07，重点掌握显存估算、并行策略、LoRA、PPO/DPO 的适用边界。
+3. **工程方向**：学习 06、08、09，重点掌握吞吐/时延权衡、RAG 链路、幻觉治理与评估方法。
+4. **应用方向**：在 08、10、11、12 中理解 Prompt、工具调用、工作流与 Agent 的关系。
+
+## 实战项目与扩展资源
+
+- [tiny-llm-zh](https://github.com/wdndev/tiny-llm-zh)：从零实现小参数量中文 LLM，覆盖预训练、微调与 RL。
+- [tiny-rag](https://github.com/wdndev/tiny-rag)：多路召回与重排的轻量 RAG 实现。
+- [tiny-mcp](https://github.com/wdndev/tiny-mcp)：用 Prompt 与 Function Calling 构建 MCP 服务端和客户端。
+- [llama3-from-scratch-zh](https://github.com/wdndev/llama3-from-scratch-zh)：从零实现并加载 Llama 3 官方权重。
+- [AI 工程师八股](https://github.com/wdndev/ai_interview_note)：机器学习、推荐、搜索等通用面试知识。
+
+## 在线阅读与勘误
+
+- [在线阅读](http://wdndev.github.io/llm_interview_note)
+- 内容以学习与面试准备为目标；工程框架、模型版本和最佳实践迭代较快，请结合官方文档核对。
+- 欢迎通过仓库 Issue 或 Pull Request 补充资料、报告错误与改进表述。
