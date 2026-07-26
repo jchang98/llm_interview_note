@@ -238,6 +238,8 @@
 
 ### 2.5 常见大模型
 
+[主流 LLM 模型结构速通（Llama、Qwen、GLM、DeepSeek）](</02.大语言模型架构/主流LLM模型结构速通/主流LLM模型结构速通.md> "主流 LLM 模型结构速通")
+
 [llama系列模型](/02.大语言模型架构/llama系列模型/llama系列模型.md "llama系列模型")
 
 [chatglm系列模型](/02.大语言模型架构/chatglm系列模型/chatglm系列模型.md "chatglm系列模型")
