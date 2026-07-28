@@ -1,60 +1,60 @@
-# Kimi K3 技术报告笔记：KDA、AttnRes 与 2.8T 稀疏 MoE
+# Kimi K3 技术报告笔记：KDA、AttnRes 与 2.8T-A104B 稀疏 MoE
 
-> **资料边界**：截至 2026-07-26，Moonshot 已发布 [Kimi K3 官方技术博客](https://www.kimi.com/blog/kimi-k3)，并明确表示完整架构、训练和评测技术报告将后续发布。本文只总结该博客明确披露的内容；路由损失、数据配比、训练 token、并行规模和 RL 超参等未公开信息不作推断。小红书已通过 `xhs-cli` 搜索并直读《Kimi-K3技术报告：16/896的稀疏度如何可能》等解读，主要用于定位官方资料。
+> **资料边界（更新至 2026-07-28）**：Moonshot 已于 2026-07-27 同步公开 [Kimi K3 完整技术报告](https://github.com/MoonshotAI/Kimi-K3/blob/main/k3_tech_report.pdf) 与开放权重。本页以官方报告、[官方仓库 README](https://github.com/MoonshotAI/Kimi-K3) 和技术博客为事实来源；小红书/知乎“报告解读”只用于发现阅读线索，不把二手推测写成事实。报告仍未完整披露原始语料配比、总训练 token、完整 RL 超参等细节。
 
 ## TL;DR
 
-Kimi K3 是一个 2.8T 参数、1M context、原生视觉、面向开放权重发布的 MoE 模型。它的主线不是只做更大 MoE，而是将：
+Kimi K3 是一个 `2.8T-A104B`、1M context、原生视觉、已开放权重的 MoE 模型。它的主线不是只做更大 MoE，而是将：
 
 ```text
 KDA（跨序列高效注意力）
   + AttnRes（跨深度选择性残差读取）
-  + Stable LatentMoE（896 选 16）
+  + Stable LatentMoE（896 个路由专家选 16 + 2 个共享专家）
   + Quantile Balancing / Per-Head Muon
   + MXFP4 / MXFP8 QAT 与全均衡 EP
   → 长程代码、知识工作、多模态 Agent 服务
 ```
 
-官方称这些架构与训练配方相对 Kimi K2 约提升 2.5× overall scaling efficiency；该数字是整体经验性表述，不应拆解为任一单项组件的独立增益。
+文本骨干共 93 层：`69 KDA + 24 Gated MLA`，按 `3× KDA → 1× Gated MLA` 交错，并在最后额外插入一层 MLA；92 个 MoE 层与 1 个 dense 层组成宽度方向的计算。官方称这些架构与训练配方相对 Kimi K2 约提升 2.5× overall scaling efficiency；该数字是**整体**经验性表述，不应拆解为任一单项组件的独立增益。
 
 ## Fast Look
 
-**实体关系**：`输入（文本/视觉）→ KDA + Gated MLA 建模序列 → AttnRes 跨层选择性取表示 → SiTU 控制激活 → Stable LatentMoE 路由 16/896 专家 → Quantile Balancing 保持负载 → Per-Head Muon 优化注意力 → MXFP4/MXFP8 QAT + 全均衡 EP 训练 → KDA prefill cache / Mooncake 服务`。模型能力还依赖 preserved thinking history 的 Agent 协议，不能只替换底座模型。
+**实体关系**：`文本 / 图像 / 视频 → MoonViT-V2 + projector → KDA + Gated MLA 建模序列 → AttnRes 跨层选择性取表示 → SiTU-GLU 控制激活 → Stable LatentMoE 路由 16/896 专家 + 2 shared experts → Quantile Balancing 保持负载 → Per-Head Muon 优化注意力 → MXFP4/MXFP8 QAT + MoonEP / FlashKDA 训练 → KDA prefill cache / Mooncake 服务`。后训练则是 `任务合成 → AgentEnv 可分叉沙箱 → 百万 token RL → preserved thinking history 的 Agent 协议`；不能只替换底座模型而忽略运行时。
 
-#### Kimi K3（2.8T、原生视觉、1M Context）
+#### Kimi K3（2.8T-A104B、93 层、原生视觉、1M Context）
 
-- **描述**：K3 是 Moonshot 的 2.8T 参数模型，具有 native vision 能力与 1M token context，目标是长程 coding、knowledge work 和 reasoning；官方博客称完整权重计划于 2026-07-27 发布。
-- **与之前方法的区别**：相对 Kimi K2，官方披露 K3 引入 KDA、AttnRes，并把 MoE 稀疏度推进到 896 选 16；相对纯文本 LLM，视觉输入进入同一原生模型而非完全外接式流程。
-- **优点**：将长上下文、视觉理解和工具型任务放在同一模型能力范围；高稀疏度使总容量可扩展到多万亿参数而不激活全部专家。
-- **缺点/注意点**：2.8T 是总参数而非每 token 计算量；1M context 是能力上限，不代表长任务无需上下文管理。官方也承认整体用户体验仍落后于 Claude Fable 5 与 GPT-5.6 Sol。
+- **描述**：K3 是 Moonshot 已开放权重的 native multimodal MoE：总参数 2.8T、每 token 激活 104B、93 个 decoder 层、96 个 attention heads、160K vocabulary、1,048,576 context。文本与视觉共享一个端到端模型路径。
+- **与之前方法的区别**：相对 Kimi K2，K3 用 KDA + AttnRes 改造序列/深度信息流，并把 MoE 推进到 896 routed experts 中 Top-16；相对纯文本 LLM，MoonViT-V2 的视觉特征经轻量 projector 接入同一 embedding 空间。
+- **优点**：将长上下文、视觉理解和工具型任务放在同一模型能力范围；`A104B` 明确区分每 token 激活计算与 2.8T 总容量，便于部署估算。
+- **缺点/注意点**：104B 仍是极大的 active 模型，且完整专家权重需驻留在 EP GPU 域；1M 是最大窗口而非免上下文管理保证，报告的 Agent 成绩也依赖具体 harness、effort 与工具配置。
 
-#### Kimi Delta Attention（KDA）
+#### Kimi Delta Attention（KDA）与 3:1 Hybrid Attention
 
-- **描述**：KDA 是 K3 的注意力骨架，官方将其定义为面向大规模序列建模的高效 attention foundation；其目标是改善信息沿序列长度的流动和服务效率。
-- **与之前方法的区别**：相对常规全量 Transformer attention，KDA 不是仅依赖标准 KV cache 的路径；官方特别说明它对传统 prefix cache 带来新挑战，因此需要专门的 prefill-cache 实现。
-- **优点**：为 1M context 和超大模型提供更可扩展的注意力基础，并与 KDA prefill cache 配合降低服务成本。
-- **缺点/注意点**：官方技术博客尚未公开完整公式、状态表示、复杂度与 kernel 细节；不能把 KDA简单等同于线性注意力或标准 MLA，部署需等待官方实现与兼容性说明。
+- **描述**：KDA 是带细粒度门控的 delta-rule **线性注意力**，以固定大小的 recurrent state 承载长程 token mixing；K3 每 3 层 KDA 插入 1 层 Gated MLA（共 69/24），以 latent KV 的显式全局读取补足线性状态的选择性。
+- **与之前方法的区别**：相对全层 dense attention，KDA 的状态不随序列长度线性增长；相对“全部改线性注意力”，K3 保留周期性 Gated MLA，因此是 hybrid attention 而非纯 KDA。
+- **优点**：大部分层避免长度相关的 KV cache，适合百万上下文；MLA 层提供高容量全局检索，形成速度—表达能力折中。
+- **缺点/注意点**：KDA 的 prefix/prefill cache 与传统 Transformer KV cache 语义不同，需专门实现；只有 24 层 MLA 保留 per-token latent KV，长上下文成本降低不等于归零。
 
-#### Attention Residuals（AttnRes）
+#### Block Attention Residuals（AttnRes）
 
-- **描述**：AttnRes 在模型深度方向选择性检索先前层的表示，而不是把所有残差一律累加；与 KDA 共同构成 K3 的架构主干。
-- **与之前方法的区别**：相对标准 residual connection 的逐层固定相加，AttnRes 将跨层信息读取改为选择性机制，试图降低深层网络中无差别累积的干扰。
-- **优点**：理论上可让深层按需复用有用表示，改善跨深度信息流，并支持更大模型的稳定扩展。
-- **缺点/注意点**：博客未披露选择函数、额外计算、训练稳定性曲线及消融数据；其具体收益不能脱离 KDA、MoE 与训练配方单独归因。
+- **描述**：AttnRes 把“跨层残差”改为注意力读取：learned pseudo-query 对 embedding、当前 block 与此前 block 的表示生成权重，选择性混合跨深度信息。K3 使用 block 变体，将层聚为 block 后保存/读取 block representation。
+- **与之前方法的区别**：相对标准 residual 的逐层固定相加，AttnRes 不把所有历史压进单一 residual stream；相对逐层 AttnRes，block 化将状态量和跨 stage 通信从按层保存降为按 block 保存。
+- **优点**：可按需直接读取更早层的表示，改善深层梯度与信息流；报告给出 block 设计以降低 memory/通信开销。
+- **缺点/注意点**：它带来额外 pseudo-query、归一化和跨 block 状态；其收益须与计算/内存代价、block size 和其他训练配方共同评估，不能将 2.5× 总效率全部归因于 AttnRes。
 
-#### Stable LatentMoE（16 / 896 Experts）
+#### Stable LatentMoE（16 / 896 Routed + 2 Shared Experts）
 
-- **描述**：K3 的稀疏 MoE 每个 token 有效激活 896 名专家中的 16 名；Stable LatentMoE 是支撑这一极高稀疏度的稳定路由/表示框架。
+- **描述**：K3 的每个 MoE 层先将 7,168 维 hidden state 投影到 3,584 维 latent，再做专家计算；每个 token 从 896 个 routed experts 选择 16 个，并恒定经过 2 个 shared experts。
 - **与之前方法的区别**：相对低专家数或较高激活比例的 MoE，K3 将总专家数显著放大、激活比例压到约 1.8%；相对稠密 FFN，每个 token 只走少量专家。
 - **优点**：在有限 active FLOPs 下获得更大参数容量与更细粒度的专家分工；是 K3 相对 K2 提高 scaling efficiency 的关键组成。
-- **缺点/注意点**：16/896 的极端稀疏使路由错误、负载不均、all-to-all 通信和专家并行吞吐成为一等问题；官方未公开每 token active 参数量，不能仅由专家数量推算成本。
+- **缺点/注意点**：16/896 的极端稀疏使路由错误、负载不均、all-to-all 通信和专家并行吞吐成为一等问题；`104B active` 是整模型口径，不能由 `16 ÷ 896` 或单层专家数自行反推。
 
-#### Quantile Balancing（分位数负载均衡）
+#### Quantile Balancing（分位数负载均衡）与 Soft Drop
 
-- **描述**：从 router score 的分位数直接推导专家分配，避免依赖启发式更新与一个敏感的 balancing 超参数。
-- **与之前方法的区别**：相对在辅助损失或手工阈值/动态规则中反复调节平衡项，Quantile Balancing 直接以路由分数分布决定分配边界。
+- **描述**：K3 采用 auxiliary-loss-free 路由：expert-specific bias 只用于 Top-k 的 dispatch 选择，不进入已选专家的混合权重。Quantile Balancing 以当前路由分数的分位数更新该 bias；溢出 token 使用 soft drop 机制处理。
+- **与之前方法的区别**：相对 auxiliary-loss 路由，负载控制不通过额外损失直接干预 router 目标；相对固定步长更新 bias，分位数统计让更新幅度随当前分数分布自适应。
 - **优点**：减少调参敏感度，旨在让高专家数、低激活率下的专家利用率更稳定。
-- **缺点/注意点**：博客未给出数学定义与和 auxiliary-loss-free/其他 routing 的对照；分位数估计本身也可能随 batch、数据分布和并行切分变化。
+- **缺点/注意点**：报告给出了路由/bias 的定义，但其稳定性仍依赖 batch、数据分布和并行切分；soft drop 是容量保护，不应被误解为“无损负载均衡”。
 
 #### Per-Head Muon
 
@@ -63,12 +63,19 @@ KDA（跨序列高效注意力）
 - **优点**：可针对 head 间统计差异调整学习动态，服务于超大模型的稳定和高效训练。
 - **缺点/注意点**：这不是对所有参数“逐头优化”；其精确作用范围、状态开销和超参仍未由 K3 博客完整公开，不能直接照搬为通用最优配置。
 
-#### Gated MLA 与 SiTU（Sigmoid Tanh Unit）
+#### Gated MLA 与 SiTU-GLU（Sigmoid Tanh Unit）
 
-- **描述**：Gated MLA 用门控增强注意力选择性；SiTU 是 K3 采用的激活控制单元。官方将二者列为提升 attention selectivity 与 activation control 的组件。
-- **与之前方法的区别**：相对无额外门控的 MLA，Gated MLA 增加选择机制；相对 ReLU/GELU/SwiGLU 等常用激活，SiTU 使用 sigmoid 与 tanh 相关的门控/非线性设计。
+- **描述**：Gated MLA 在 MLA 输出端加入输入相关的全秩 channel gate；SiTU-GLU 是 K3 MoE 的门控激活，以有界的 tanh 类门分支控制特征幅度。
+- **与之前方法的区别**：相对无额外门控的 MLA，Gated MLA 让每个 token 选择性调制读取到的通道；相对 SwiGLU，SiTU-GLU 重点引入有界门控以抑制大激活。
 - **优点**：将“读哪些 token”和“激活哪些特征”的控制变得更细，可能有助于高稀疏 MoE 与长序列场景的稳定性。
-- **缺点/注意点**：博客没有给出 SiTU 的精确公式和 Gated MLA 的完整投影结构；不要仅凭名称把 SiTU 当作任意已有激活函数的同义词。
+- **缺点/注意点**：Gated MLA 与 SiTU-GLU 是 K3 的特定组合，不能只因名称相似就直接替换进其他 checkpoint；实际收益仍需结合 kernel、量化和训练配方验证。
+
+#### MoonViT-V2（从零训练的原生视觉编码器）
+
+- **描述**：MoonViT-V2 是约 401M 参数、27 层的视觉 Transformer；图像与视频共用参数，空间 attention 与时间 attention 因子化，输出经轻量 MLP projector 映射到 LLM embedding 空间。
+- **与之前方法的区别**：相对 Kimi K2.5/SigLIP 初始化视觉塔，K3 从零开始以 next-token prediction 联合训练，不使用对比预训练初始化。
+- **优点**：报告显示它在视觉评测上达到 SigLIP 初始化基线，同时梯度范数更低、更少尖峰，联合优化更稳定；原生路径支持图像/视频与文本共同建模。
+- **缺点/注意点**：约 0.4B 视觉塔和视频 token 仍会占用显存、上下文与预填充时间；“原生多模态”不代表所有视觉任务必然优于专用 VLM 或外部工具链。
 
 #### MXFP4 / MXFP8 Quantization-Aware Training（QAT）
 
@@ -77,12 +84,33 @@ KDA（跨序列高效注意力）
 - **优点**：降低权重带宽和显存压力，缩小训练精度与部署精度之间的落差，为大规模 MoE 推理提供可部署性。
 - **缺点/注意点**：QAT 增加训练复杂度，对硬件格式、kernel 和数值稳定性敏感；需要同时验证质量、通信、KV/prefill cache 与端到端时延，不能只比较单模型 FLOPs。
 
-#### Fully Balanced Expert Parallel（静态 shape、无主机同步 EP）
+#### MoonEP / Fully Balanced Expert Parallel（静态 shape、无主机同步 EP）
 
-- **描述**：为避免专家失衡在大 expert-parallel 规模下损害吞吐，K3 使用完全均衡的 EP 训练方法，保持 static shapes，关键路径上不进行 host synchronization。
+- **描述**：为避免专家失衡在大 expert-parallel 规模下损害吞吐，K3 使用 MoonEP 的完全均衡 EP 训练方法，保持 static shapes，关键路径上不进行 host synchronization。
 - **与之前方法的区别**：相对动态 token dispatch 或依赖 CPU/host 协调的负载修正，该设计优先保证通信形状和关键路径稳定。
 - **优点**：减少负载抖动与主机同步开销，使大规模 all-to-all 更可预测，配合 Quantile Balancing 支持极稀疏 MoE。
 - **缺点/注意点**：静态 shape 可能带来 padding 或容量浪费；它解决的是训练吞吐与平衡，不替代推理时的动态流量控制。
+
+#### FlashKDA（KDA 的高性能 Prefill Kernel）
+
+- **描述**：FlashKDA 是 Kimi 为 KDA 实现的高性能 kernel，面向线性注意力的 prefill 阶段；官方已将其作为独立基础设施项目开放。
+- **与之前方法的区别**：相对直接使用通用 linear-attention 实现，它针对 KDA 的状态更新与内存访问模式专门优化；相对只优化 MoE 的 MoonEP，它解决的是 attention 算子而非专家 all-to-all 通信。
+- **优点**：官方在 NVIDIA H20 上报告，相比 `flash-linear-attention` 基线，prefill 速度提高约 1.72–2.22 倍；这使 KDA 的长前缀处理优势能真正落到服务吞吐上。
+- **缺点/注意点**：该数字是特定硬件、版本和 **prefill** 场景的 kernel 对比，不能外推为整模型端到端加速比；部署仍需核对 GPU、编译链和推理引擎是否支持该后端。
+
+#### AgentEnv（面向 Agent RL 的高保真可分叉沙箱）
+
+- **描述**：AgentEnv 是 Kimi 与 KVCache.ai 合作的 Agent 运行环境，用于大规模后训练；它强调强隔离，并支持环境快照、恢复和 fork，以便并行运行与复用任务状态。
+- **与之前方法的区别**：相对每个 rollout 从零初始化的普通容器/脚本环境，AgentEnv 把可恢复、可分叉的交互式工具环境作为训练基础设施；相对 MoonEP/FlashKDA，它服务于任务环境与 RL rollout，而非模型算子或 GPU 通信。
+- **优点**：降低长程工具任务的环境重建成本，便于从同一中间状态探索多个分支，并让 Agent 训练更接近真实编码/工具工作流。
+- **缺点/注意点**：快照和 fork 不会自动保证任务真实性、评测无泄漏或奖励正确；环境镜像、权限、网络、测试数据与成本上限仍需自行治理。
+
+#### 大规模任务合成与百万 Token Agent RL
+
+- **描述**：官方说明 K3 的后训练覆盖通用推理、通用 Agent、编程 Agent 三类任务，并进行大规模任务合成与百万 token 上下文的 RL 基建；AgentEnv 是其中的环境层。
+- **与之前方法的区别**：相对以短问答偏好数据为主的后训练，重点转向多步工具调用、长轨迹验证与长上下文状态管理；相对只训练语言模型回答，训练对象包含“模型 + 工具环境 + rollout”的闭环。
+- **优点**：更贴近代码、研究和知识工作中“执行—观察—修正”的任务形态，也解释了 K3 对 preserved thinking history 和 Agent harness 的依赖。
+- **缺点/注意点**：报告/公开文章没有完整披露数据来源、任务配比、奖励设计、采样预算和各项独立增益；不能仅凭 benchmark 或案例反推出通用 Agent 成功率。
 
 #### KDA Prefill Cache、Mooncake 与 64+ Accelerator Supernode
 
@@ -100,19 +128,46 @@ KDA（跨序列高效注意力）
 
 #### Thinking Effort 与长程 Agent 行为
 
-- **描述**：发布时 K3 默认 max thinking effort，后续计划提供 low/high；训练偏向长程高难任务，官方展示其在代码、研究、知识工作与多模态创建中的 Agent 例子。
+- **描述**：K3 始终返回 `reasoning_content`，通过顶层 `reasoning_effort` 设置 `low`、`high` 或 `max`（默认 `max`）；训练偏向长程高难任务，官方展示其在代码、研究、知识工作与多模态创建中的 Agent 例子。
 - **与之前方法的区别**：相对固定单一推理预算，effort 允许按任务选择测试时计算；相对短单轮助手，目标是多工具、长会话的自主执行。
 - **优点**：复杂工程任务可使用更充分的推理与工具循环；默认最大努力有利于展示上限能力。
 - **缺点/注意点**：更多 thinking 直接增加成本和时延，并可能导致过度主动：官方明确警告它可能在意图模糊时替用户做意外决定，生产中须以系统提示、`AGENTS.md`、权限和人工确认收紧边界。
+
+## 报告解读的统一视角：三维选择性计算
+
+这是对 XHS / 知乎解读的**组织框架**，不是官方另行命名的单一模块。它有助于把看似分散的名词放回同一张图：
+
+```text
+序列维度：KDA 选择如何压缩、保留和更新历史
+深度维度：Block AttnRes 选择读取哪些早期 block 表示
+宽度维度：Stable LatentMoE 选择激活哪些专家
+                 ↓
+训练/系统维度：Quantile Balancing + MoonEP + FlashKDA + AgentEnv
+                 ↓
+长程 Agent：百万 token RL + 完整 thinking 历史 + 工具 harness
+```
+
+- **不要混淆**：KDA 与 AttnRes 都涉及“选择”，但前者处理 token 序列中的历史状态，后者处理网络深度中的历史表示；MoE 则是在同一层的宽度方向选择计算分支。
+- **系统含义**：K3 的 2.5× scaling efficiency 是上述架构、优化器、量化、通信、算子和训练流程的联合结果，不是三条路径中任意一条的独立增益。
+- **工程含义**：模型权重开放不等于开箱即得相同 Agent 效果。长上下文缓存、专家通信、运行环境、工具权限、thinking-history 协议和评测 harness 都是能力闭环的一部分。
 
 ## 版本与证据地图
 
 | 结论 | 证据状态 |
 | --- | --- |
-| 2.8T、1M context、native vision、KDA、AttnRes、16/896 experts | 官方技术博客明确披露 |
-| Stable LatentMoE、Quantile Balancing、Per-Head Muon、Gated MLA、SiTU | 官方技术博客明确披露名称与高层作用 |
-| MXFP4 weights / MXFP8 activations QAT、全均衡 EP、KDA prefill cache | 官方技术博客明确披露 |
-| 完整 KDA / AttnRes 公式、SiTU 定义、路由损失、训练数据/超参、完整 benchmark protocol | 完整技术报告尚未发布，不能补写为事实 |
+| 2.8T-A104B、93 层、69 KDA + 24 Gated MLA、896 routed + 2 shared experts | 官方仓库与完整技术报告明确披露 |
+| KDA 3:1 hybrid、Block AttnRes、Stable LatentMoE、Quantile Balancing、SiTU-GLU、MoonViT-V2 | 完整技术报告明确披露 |
+| MXFP4 weights / MXFP8 activations QAT、MoonEP、KDA prefill cache、preserved thinking history | 官方仓库与完整技术报告明确披露 |
+| 原始训练语料比例/总 token、全部 RL 超参、各单项架构改动的独立因果收益 | 报告仍未完整公开；不能从总 2.5× scaling efficiency 反推 |
+
+## 报告评测：应如何阅读分数
+
+官方表格显示 K3 在 `max` thinking effort 下取得 GPQA Diamond 93.5、DeepSWE 67.5、Terminal-Bench 2.1 88.3、BrowseComp 91.2、MCPMark-Verified 94.5 等分数。它们说明 K3 在 coding / agent / 长上下文任务上具备前沿竞争力，但不能把表格读作“模型本体的绝对排名”：
+
+- **Harness 是变量**：DeepSWE、Terminal-Bench、SWE-Marathon、Agents' Last Exam 等分别使用 Kimi Code、Claude Code、Codex 或其他实现；同一底座模型换 harness 可能明显变分。
+- **工具增强是变量**：HLE-Full、MMMU-Pro、CharXiv、MathVision、ZeroBench 的 `a / b` 分数分别对应不使用 / 使用工具，不能只摘取后者比较。
+- **推理预算是变量**：K3 取 `reasoning_effort=max`、temperature 1.0；单步任务 top-p 0.95、Agent 任务 top-p 1.0。它反映的是最大努力配置，不是最低延迟配置。
+- **部分对比来自外部榜单**：报告明确标注部分对手/任务来自 Artificial Analysis、Vals AI 或官方 leaderboard，时间点也不同；应优先比较相同 benchmark、版本、harness、预算与工具权限下的复现实验。
 
 ## 面试回答框架
 
@@ -126,6 +181,11 @@ K3 将高稀疏 MoE 与系统化训练/服务协同推进：KDA 和 AttnRes 分�
 
 ## 小红书检索对应与参考资料
 
-- [Kimi-K3技术报告：16/896的稀疏度如何可能](https://www.xiaohongshu.com/explore/6a595a36000000000503a31a?xsec_token=ABXudNKJKEhtMEi8Px83ZnRfpXpiISB8UuTHsWrCZboLM%3D&xsec_source=pc_search)：已直读；其中列出的 K3 官方博客、Muon、KDA 与 Attention Residuals 资料可作为延伸阅读线索，本文事实以官方博客为准。
+- [小红书：Kimi-K3技术报告：16/896的稀疏度如何可能](https://www.xiaohongshu.com/explore/6a595a36000000000503a31a?xsec_token=ABXudNKJKEhtMEi8Px83ZnRfpXpiISB8UuTHsWrCZboLM%3D&xsec_source=pc_search)：用于定位技术脉络；本文的架构、训练和评测事实均以以下官方材料为准。
+- [小红书：Kimi K3 的三条高速路](https://www.xiaohongshu.com/explore/6a59b531000000001d0219d3)：将 KDA、AttnRes、LatentMoE 归纳为序列、深度、宽度三条信息路径；本文仅将它作为阅读框架，不将其未经报告支持的延伸说法当作事实。
+- [小红书：Kimi K3 架构解读——把 attention 拆三轴](https://www.xiaohongshu.com/explore/6a68176e000000000503a53d)：用于定位 KDA / AttnRes / MoE 的三维解释与后训练线索。
+- [知乎：Kimi K3 开放日（Kimi 官方）](https://zhuanlan.zhihu.com/p/2065221319797498039)：确认技术报告、权重及 MoonEP、FlashKDA、AgentEnv 的同步开放，并概述 K3 后训练和基础设施边界。
+- [MoonshotAI / Kimi-K3 官方仓库、配置、评测与权重入口](https://github.com/MoonshotAI/Kimi-K3)
+- [Kimi K3 完整技术报告 PDF](https://github.com/MoonshotAI/Kimi-K3/blob/main/k3_tech_report.pdf)
 - [Kimi K3 官方技术博客：Open Frontier Intelligence](https://www.kimi.com/blog/kimi-k3)
-- [MoonshotAI 官方组织](https://github.com/MoonshotAI)
+- [Kimi Linear / KDA 技术报告](https://arxiv.org/abs/2510.26692)
