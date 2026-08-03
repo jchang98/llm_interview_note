@@ -29,9 +29,23 @@ FP4 QAT、可恢复 rollout、百万上下文 RL、Agent 沙箱
 
 关键思想：先让不同领域独立达到较高能力，再在学生策略自身 rollout 的分布上整合；开放任务以 GRM 和 rubric 取代单标量奖励的不足。
 
+## V4-Flash 正式版（0731）与 Preview：变化在哪里？
+
+> **证据边界（2026-08-03）**：本轮用 XHS 与知乎 CLI 检索并直读了正式版讨论。官方 Preview 公告确认 Flash 的 `284B total / 13B active / 1M context`、思考/非思考双模式及 Agent 产品适配；但暂未检索到一份把“0731 正式版相对 Preview 的全部训练改动、完整 benchmark protocol”逐项列出的官方公告。因此下表将**规格不变**与社区/实测观察严格分开。尤其，最直接的 XHS 对比是 `V4-Flash-0731` 对 **V4-Pro-Preview**，不能把它外推为“Flash-0731 在全部任务、全部 Preview 版本上均更强”。
+
+| 维度 | Preview 基线 | Flash 正式版（0731） | 证据强度与正确读法 |
+| --- | --- | --- | --- |
+| 模型规模与长上下文 | Flash Preview 为 284B 总参数、13B 激活参数、1M context | 社区解读称结构与参数规模未变 | 官方 Preview 公告确认基线；“0731 未改结构”来自 XHS/知乎解读，合理但仍应等正式版版本说明或权重 diff 复核 |
+| 主要升级位置 | Preview 已具备 CSA/HCA、mHC、Muon 与两阶段后训练路线 | 多个解读一致指向**重新/强化后训练**，而不是换底座架构 | 不应把“后训练升级”具体化为未公开的 RL 数据、奖励或 token 数 |
+| Agent 行为 | 支持 Claude Code、OpenCode 等产品适配 | 社区实测称更愿意长程执行、主动跑测试并在工具/代码错误后继续自纠；也有“自研 DeepSeek Harness 即将开源”的说法 | 前半是个案观察，不是通用胜率；后半尚未看到官方仓库/公告，不能写成“已开源” |
+| API / 兼容性 | 官方 Preview 公告给出 OpenAI ChatCompletions 与 Anthropic API | 社区称正式版新增/强调 Responses API，并针对 Codex 适配 | 属于二手产品信息；接入时以 [当前官方 API 文档](https://api-docs.deepseek.com/quick_start/pricing) 的实际接口与模型名为准 |
+| 速度、价格与能力对比 | Flash 的定位本就是小激活参数、快响应、低成本 | 实测普遍认为正式版更适合 Coding/Agent；一篇对比帖认为它较 Pro Preview 更快、更省且更稳，但 Pro Preview 的深度/跨界发挥更强 | 这是同一任务的主观比较，不能替代同 harness、同预算、同重复次数的 benchmark；价格是动态项，不记录为永久常数 |
+
+**面试式一句话**：`Flash-0731` 更像一次“**底座规模基本不动、把 Agent 后训练和产品协议做实**”的正式化迭代。已知的变化重点在长程工具轨迹、自我纠错和接口/Agent 适配；未知的是这些收益分别来自数据、GRM、RL、蒸馏、harness 还是服务端配方，不能从社区跑分倒推。
+
 ## Fast Look
 
-**架构—训练关系**：`MLA（KV latent 压缩）→ DSA（token 级稀疏选择）→ V4 CSA（压缩块 + 稀疏选择 + 局部窗口）↔ HCA（重压缩后的全局 dense）→ 1M context rollout / RL`。CSA 负责局部精细检索，HCA 负责廉价全局概览；二者交错使用，不应把 CSA 直接等同为“MLA + DSA”，也不应把 HCA 称为 MLA。
+**架构—训练关系**：`MLA（KV latent 压缩）→ DSA（token 级稀疏选择）→ V4 CSA（压缩块 + 稀疏选择 + 局部窗口）↔ HCA（重压缩后的全局 dense）→ 1M context rollout / RL → Flash-0731（同级别底座上的 Agent 后训练与协议迭代）`。CSA 负责局部精细检索，HCA 负责廉价全局概览；二者交错使用，不应把 CSA 直接等同为“MLA + DSA”，也不应把 HCA 称为 MLA。
 
 ### MLA（Multi-head Latent Attention，多头潜变量注意力）
 
@@ -46,6 +60,13 @@ FP4 QAT、可恢复 rollout、百万上下文 RL、Agent 沙箱
 - **与 MLA 的区别**：MLA 主要缩小“每个 token 的 KV 表示”；DSA 主要缩小“每个 query 实际参与 attention 的历史 token 数”。两者在 V3.2 可组合，而非互相替代。
 - **优点**：主 attention 从全历史计算转为内容驱动的 top-k 选择，长上下文的主计算量约从 `O(L²)` 降为 `O(L·k)`。
 - **缺点/注意点**：Indexer 仍需扫描候选历史 token，理论上仍存在 `O(L²)` 部分；top-k 漏检会丢失远程证据，不能称为无损或完全线性注意力。
+
+### DeepSeek-V4-Flash-0731（正式版后训练迭代）
+
+- **描述**：社区将 2026-07-31 上线的 Flash 正式 API 称为 `DeepSeek-V4-Flash-0731`。现有解读的共同结论是：Flash 的模型规模/长上下文定位延续 Preview，主要变化集中在后训练后的 Coding / Agent 行为与 API 适配。
+- **与 Preview 的区别**：相对 Preview，观察到更长的工具执行链、更主动的测试/验证和工具失败后的自我纠错；相对“换大模型/换架构”的升级，公开信息更支持“相同级别底座上的后训练与产品化迭代”。需要注意，部分帖子实际拿它与 **V4-Pro-Preview** 比较，而不是 Flash Preview。
+- **优点**：若这些行为在可复现评测中成立，能提升代码审查、调试和长程任务的完成质量；保持 Flash 的小激活参数定位，利于较低时延/成本的 Agent 部署。
+- **缺点/注意点**：这不是完整官方 changelog：训练数据、RL 奖励、教师/蒸馏、harness 与服务端采样参数尚未逐项披露；“表现像不同模型”“断层领先”等属于主观或二手宣传，必须在同一 harness、工具权限、预算和任务集下复测。
 
 ### CSA（Compressed Sparse Attention，压缩稀疏注意力）
 
@@ -169,6 +190,7 @@ FP4 QAT、可恢复 rollout、百万上下文 RL、Agent 沙箱
 ## 核验边界
 
 - 本文以公开预览版技术报告为准，不应将其设计推广为 DeepSeek 所有模型或后续版本的固定方案。
+- `DeepSeek-V4-Flash-0731` 的正式版差异目前以 XHS/知乎检索到的报告解读和实测为补充，而非完整官方变更日志；文中已将其与官方 Preview 规格、社区观点区分。后续若 DeepSeek 发布版本说明、权重提交记录或正式评测协议，应优先据此更新对比表。
 - 性能结论依赖具体推理努力、基准与评测设置，不能脱离对比条件复述为普适排名。
 - 小红书两条原文现已可直读，但附件 PDF 仅取得 12 页的文件元数据，未取得可逐页引用的正文；如后续获得附件文件，应逐页对照官方报告并补充图表解读。
 
@@ -176,6 +198,11 @@ FP4 QAT、可恢复 rollout、百万上下文 RL、Agent 沙箱
 
 - [DeepSeek-V4 官方发布公告](https://api-docs.deepseek.com/zh-cn/news/news260424/)
 - [DeepSeek-V4 技术报告（Hugging Face，当前官方路径）](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/main/DeepSeek_V4.pdf)
+- [DeepSeek API 当前模型与价格页](https://api-docs.deepseek.com/quick_start/pricing)：正式接入时的模型名、能力与价格以此为准。
+- [XHS：Deepseek V4 Flash 0731 vs Pro Preview](https://www.xiaohongshu.com/explore/6a6e25c80000000025010ed2)：直读图片对比；用于“正式 Flash 对 Pro Preview 的任务风格观察”，不作为官方 benchmark。
+- [XHS：DeepSeek-V4-Flash 正式版突然上线](https://www.xiaohongshu.com/explore/6a6c50030000000006004bf9)：直读正文；用于定位“结构规模未变、后训练/接口适配”的社区说法。
+- [知乎：如何评价 DeepSeek-V4 Flash 正式版，有哪些亮点？](https://www.zhihu.com/question/2066524692392031246/answer/2066527500830871874)：直读回答；用于定位正式 API、后训练、Responses/Codex 与自研 harness 的二手线索。
+- [知乎：如何看待 2026 年 7 月 31 日发布的 DeepSeek V4-Flash 更新？](https://www.zhihu.com/question/2066521154001674322/answer/2066612609206445214)：直读长程代码任务个案；用于说明“更长执行与自纠”是观察而非官方保证。
 - [DeepSeek-V4 技术报告中文翻译](https://www.cnblogs.com/getmoon/p/20392181)
 - [用户提供的小红书 PDF 链接](https://www.xiaohongshu.com/file/7644581796601062000?noteId=6a1702b80000000006037115&fileName=DeepSeek_v4_%E5%90%8E%E8%AE%AD%E7%BB%83.pdf&xsec_token=ABpq1C1kCvMHCuvvAJ7O94NkWO4U4_wEahBXjOB0l7T8c=&xsec_source=note_detail_file&preRoute=Search&source=NoteCard)
 - [用户提供的小红书笔记链接](https://www.xiaohongshu.com/explore/69eb48be0000000035033d8f?xsec_token=ABm2-Zwe0VURzDIWpHDy8-yKzzLdWKFlz3f36VOGqaN7Y=&xsec_source=pc_search&source=web_search_result_notes)
